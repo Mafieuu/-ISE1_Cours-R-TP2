@@ -1,6 +1,6 @@
 ---
 title: "TP2_projet_R"
-author: "Moussa_Sow_Dieme"
+author: "Moussa Sow Dieme"
 date: "2024-04-07"
 output: html_document
 ---
@@ -9,14 +9,14 @@ output: html_document
 
 ## Importations et mise en forme
 
-```{r}
+```{r echo=FALSE}
 
 # import des packages
 
 library(readxl)
 library(questionr)
 library(labelled)
-library(gtsummary)
+library(dplyr)
 
  # import de la base
 
@@ -30,11 +30,14 @@ paste("Le nombre de colonne de notre base est: ",ncol(base_tp2))
 
 ```{r}
 
-look_for(base_tp2) # A concillier dans un tableau gtsummary
+  look_for(base_tp2)%>%
+    as.data.frame()
+
 ```
 
+### ----> Labellisation
 ```{r}
-# ---- Labellisation
+
 var_label(base_tp2$region)<-"region du producteur"
 var_label(base_tp2$departement)<-"departement du producteur"
 var_label(base_tp2$sexe)<-"sexe du producteur"
@@ -48,18 +51,184 @@ var_label(base_tp2$niveau_alphabs)<-"niveau d'aphabetisation du producteur"
 var_label(base_tp2$types_varietes)<-"type de variete utilise pour la production de sesame par le producteur"
 var_label(base_tp2$types_varietes_1)<-"Utilisateurs de varietes traditionelles "
 var_label(base_tp2$types_varietes_2)<-"Utilisateurs de varietes ameliorees "
+
 #======> Les deux variables precedentes decoulent de la variable types_varietes leur existence decoule de la digitalisation du questionnaire !?
-var_label(base_tp2$criteres_var)<-"Je ne sais pas quoi ecrire" # A completer ....
+
+
+var_label(base_tp2$criteres_var)<-"liste des critere de choix des varietes de sesame retenu" 
+var_label(base_tp2$criteres_var_1)<-"critere rendement eleve" 
+var_label(base_tp2$criteres_var_2)<-"critere taille des grains" 
+var_label(base_tp2$criteres_var_3)<-"critere resistence aux maladides ravageurs" 
+var_label(base_tp2$criteres_var_4)<-"critere tolerence aux secheresses"
+var_label(base_tp2$criteres_var_5)<-"critere tolerence aux inondations"
+var_label(base_tp2$criteres_var_6)<-"critere faible charge de travail"
+var_label(base_tp2$criteres_var_7)<-"critere faible quantite d'intrants"
+var_label(base_tp2$criteres_var_8)<-"critere facile a transformer"
+var_label(base_tp2$criteres_var_9)<-"critere haut teneur en huille"
+var_label(base_tp2$criteres_var_10)<-"critere haut rendement apres transformations"
+var_label(base_tp2$criteres_var_11)<-"critere demande sur le marche"
+var_label(base_tp2$criteres_var_12)<-"critere bon gout"
+var_label(base_tp2$criteres_var_13)<-"critere belle couleur"
+var_label(base_tp2$criteres_var_14)<-"critere haut rendement en fourrage"
+var_label(base_tp2$criteres_var_15)<-"critere qualite de fourrage" 
+var_label(base_tp2$criteres_var_16)<-"critere autre a preciser" 
 
 ```
 
 ### Resultat de la labelisation
 
 ```{r}
-look_for(base_tp2) # tableau gtsummary
+look_for(base_tp2)[,c("pos","label","levels")]
 
 ```
-
+### ----> Recodage
 ```{r}
-# ---- Recodage
+base_tp2_recode<-as.data.frame(base_tp2) 
+# Les variables dont les informations sont incomplete(region,departement,...) ne seront pas recode
+
+# ------------- variable sexe -------------
+base_tp2_recode$sexe<-recode_factor(base_tp2_recode$sexe,
+                        "1"="Homme",
+                        "2"="Femme"
+
+                        )
+
+# ------------- variable sit_mat -------------
+
+base_tp2_recode$sit_mat<-recode_factor(base_tp2_recode$sit_mat,
+                        "1"="Marie (e)",
+                        "2"="Veuf ve)",
+                        "3"="Divorce (e)",
+                        "4"="Separe (e)",
+                        "5"="Celibataire"
+                        )
+
+# ------------- variable si_chef_men -------------
+
+base_tp2_recode$si_chef_men <-recode_factor(base_tp2_recode$si_chef_men,
+                                "1" = "femme du chef de ménage",
+                                "2" = "chef de ménage",
+                                "3" = "fils-fille du chef de ménage",
+                                "99" = "Autres"
+                                )
+# ------------- variable ethnie -------------
+
+base_tp2_recode$ethnie <-recode_factor(base_tp2_recode$ethnie,
+                                 "1" = "Wolof",
+                                "2" = "Pulaar/Toucouleur",
+                                "3" = "Sérère",
+                                "4" = "Mandika/Bambara",
+                                "5" = "Soninké",
+                                "6" = "Diola",
+                                "7" = "Manjack",
+                                "8"= "Bainouk",
+                                "9" = "Maures",
+                                "10" = "Balante",
+                                "77" = "Autre"
+                                )
+
+# ------------- variable occupation -------------
+
+# certains producteurs ont plusieurs occupation ecrit sous forme genre 12
+
+
+correspondances <- c(
+  "1" = "Agriculture",
+  "2" = "Activités extractives",
+  "3" = "Activités de fabrication (Artisanat)",
+  "4" = "Activité de transformation",
+  "5" = "Production et distribution d'électricité et de gaz",
+  "6" = "Production et distribution d'eau, assainissement, traitement des déchets et dépollution"
+)
+
+# Fonction pour générer les combinaisons d'occupations
+generer_combinaisons <- function(occupation) {
+  # Séparation de la chaîne de caractères représentant l'occupation en chiffres individuels
+  occupations <- strsplit(as.character(occupation), "")[[1]]
+  
+  # Récupération des libellés correspondant à chaque chiffre
+  labels <- correspondances[occupations]
+  
+  if(length(occupations) == 1) {
+    # Dans ce cas, retourner le libellé correspondant à cette occupation unique
+    return(labels)
+  } else {
+    # Sinon, retourner les libellés de toutes les occupations concaténés avec des tirets "-"
+    return(paste0(labels, collapse = "-"))
+  }
+}
+
+# Recodage proprement dit
+base_tp2_recode$occupation <- recode_factor(base_tp2_recode$occupation,
+                                            generer_combinaisons(base_tp2_recode$occupation))
+
+# ------------- variable formation -------------
+
+base_tp2_recode$formation <-recode_factor(base_tp2_recode$formation,
+                                "1" = "Non scolarisé",
+                                "2" = "Élémentaires",
+                                "3" = "Moyen",
+                                "4" = "Secondaire",
+                                "5" = "Licence",
+                                "6" = "Master",
+                                "7" = "Doctorat",
+                                "99" = "Ne sait pas"
+                                ) 
+
+# ------------- variable niveau_alphabs -------------
+
+base_tp2_recode$niveau_alphabs <-recode_factor(base_tp2_recode$niveau_alphabs,
+                                     "0" = "Sans niveau",
+                                     "1" = "Sais lire dans une langue",
+                                     "2" = "Sais lire et écrire dans une"
+                                     )
+                                     
+# ------------- variable types_varietes -------------
+
+base_tp2_recode$types_varietes <-recode_factor(base_tp2_recode$types_varietes,
+                                "1"= "Traditionelles",
+                                "2"="Ameliorees",
+                                "1 2" = "Traditionelles-Ameliorees",
+                                "2 1" = "Traditionelles-Ameliorees"
+                                )
+
+# ------------- variable types_varietes_1 -------------
+
+base_tp2_recode$types_varietes_1 <-recode_factor(base_tp2_recode$types_varietes_1,
+                                "0"=" NON",
+                                "1"="Oui"
+                                )
+
+# ------------- variable types_varietes_2 -------------
+
+base_tp2_recode$types_varietes_2 <-recode_factor(base_tp2_recode$types_varietes_2,
+                                "0"=" NON",
+                                "1"="Oui"
+                                )
+
+# ------------- variable criteres_var -------------
+
+# pas de recodage,c'est une liste des criteres retenu par le producteur
+
+# ------------- variable criteres_var_nb , nb in [1,16] -------------
+for (i in 1:16){
+nom_var<-paste("criteres_var_",i,sep="")
+base_tp2_recode[[nom_var]] <-recode_factor(base_tp2_recode[[nom_var]], # Technique du TP1
+                                "0"="Non",
+                                "1"="Oui"
+)
+                                
+}
+  
 ```
+### Resultat du recodage
+```{r}
+head(base_tp2_recode,10)
+    
+```
+``` {r}
+base_tp2_recode %>%
+  select( criteres_var_1: criteres_var)%>%
+  head()
+```
+  head(10)
