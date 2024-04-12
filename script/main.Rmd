@@ -2,7 +2,9 @@
 title: "TP2_projet_R"
 author: "Moussa Sow Dieme"
 date: "2024-04-07"
-output: html_document
+output:
+  html_document:
+    theme: lumen  # Changer le thème en "lumen"
 ---
 
 # TP 02-Logiciel statistique R
@@ -17,6 +19,7 @@ library(readxl)
 library(questionr)
 library(labelled)
 library(dplyr)
+library(ggplot2)
 
  # import de la base
 
@@ -35,7 +38,8 @@ paste("Le nombre de colonne de notre base est: ",ncol(base_tp2))
 
 ```
 
-### ----> Labellisation
+### ----\> Labellisation
+
 ```{r}
 
 var_label(base_tp2$region)<-"region du producteur"
@@ -81,7 +85,9 @@ var_label(base_tp2$criteres_var_16)<-"critere autre a preciser"
 look_for(base_tp2)[,c("pos","label","levels")]
 
 ```
-### ----> Recodage
+
+### ----\> Recodage
+
 ```{r}
 base_tp2_recode<-as.data.frame(base_tp2) 
 # Les variables dont les informations sont incomplete(region,departement,...) ne seront pas recode
@@ -140,27 +146,43 @@ correspondances <- c(
   "5" = "Production et distribution d'électricité et de gaz",
   "6" = "Production et distribution d'eau, assainissement, traitement des déchets et dépollution"
 )
-
 # Fonction pour générer les combinaisons d'occupations
-generer_combinaisons <- function(occupation) {
-  # Séparation de la chaîne de caractères représentant l'occupation en chiffres individuels
-  occupations <- strsplit(as.character(occupation), "")[[1]]
+generer_combinaisons <- function(chiffre) {
+  # Séparation du nombre en chiffres individuels
+  all_chiffre <- strsplit(as.character(chiffre), "")[[1]]
   
   # Récupération des libellés correspondant à chaque chiffre
-  labels <- correspondances[occupations]
+  labels <- correspondances[all_chiffre]
   
-  if(length(occupations) == 1) {
-    # Dans ce cas, retourner le libellé correspondant à cette occupation unique
-    return(labels)
-  } else {
-    # Sinon, retourner les libellés de toutes les occupations concaténés avec des tirets "-"
-    return(paste0(labels, collapse = "-"))
-  }
+  # Retourner les libellés concaténés avec des tirets "-"
+  return(paste(labels, collapse = "-"))
 }
 
-# Recodage proprement dit
-base_tp2_recode$occupation <- recode_factor(base_tp2_recode$occupation,
-                                            generer_combinaisons(base_tp2_recode$occupation))
+chiffres <- 1:6
+
+# Utilisation de la fonction expand.grid pour générer toutes les combinaisons possibles avec répétition
+combinaisons <- expand.grid(chiffres, chiffres)
+
+# Utilisation de paste0 pour combiner les chiffres en nombres à deux chiffres
+all_combinaison_chiffre <- paste0(combinaisons$Var1, combinaisons$Var2)
+
+# Ajout des entiers de 1 à 6 à la variable "nombres"
+all_combinaison_chiffre <- c(all_combinaison_chiffre, as.character(1:6))
+all_combinaison_label<-sapply(all_combinaison_chiffre, generer_combinaisons) # applique la fonction a chaque element 
+        # trop de combinaison sans interet (...)
+
+# Créer un data frame de correspondance
+correspondance_df <- data.frame(ancienne = all_combinaison_chiffre, nouvelle = all_combinaison_label)
+
+# Recodage de la variable "occupation"
+base_tp2_recode$occupation <- case_when(
+  base_tp2_recode$occupation %in% correspondance_df$ancienne ~ 
+    correspondance_df$nouvelle[match(base_tp2_recode$occupation, correspondance_df$ancienne)],
+  TRUE ~ as.character(base_tp2_recode$occupation)  # Conserver toutes les autres valeurs inchangées
+)
+
+
+
 
 # ------------- variable formation -------------
 
@@ -221,14 +243,56 @@ base_tp2_recode[[nom_var]] <-recode_factor(base_tp2_recode[[nom_var]], # Techniq
 }
   
 ```
+
 ### Resultat du recodage
+
 ```{r}
 head(base_tp2_recode,10)
     
 ```
-``` {r}
+
+```{r}
 base_tp2_recode %>%
-  select( criteres_var_1: criteres_var)%>%
+  select( criteres_var_1: criteres_var_16)%>%
   head()
 ```
-  head(10)
+
+## Analyses descriptives
+
+```{r}
+# Tableau croisé dynamique pour l'occupation et le niveau de formation
+table(base_tp2_recode$occupation, base_tp2_recode$formation)
+
+```
+
+On remarque que les agriculteurs non scolarise sont dominant .
+
+```{r}
+# Tableau croisé dynamique entre sexe et formation
+table(base_tp2_recode$sexe, base_tp2_recode$formation)
+```
+
+```{r}
+# Histogramme de l'âge
+ggplot(base_tp2_recode, aes(x = age)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution de l'âge", x = "Âge", y = "Fréquence")
+```
+```{r}
+# Diagramme en barres pour la variable occupation
+occupation_plot <- ggplot(base_tp2_recode, aes(x = occupation)) + 
+  geom_bar(fill = "#FF5733") +  # Couleur personnalisée
+  labs(title = "Répartition des occupations", x = "Occupation", y = "Nombre de personnes") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+occupation_plot
+```
+```` {r}
+# Diagramme circulaire pour la variable occupation
+occupation_pie <- ggplot(base_tp2_recode, aes(x = "", fill = occupation)) +
+  geom_bar(width = 1, color = "white") +  # Créer un diagramme circulaire
+  labs(title = "Répartition des occupations") +
+  coord_polar("y") +  # Convertir en diagramme circulaire
+  theme_void()  # Supprimer les éléments de thème
+occupation_pie
+````
