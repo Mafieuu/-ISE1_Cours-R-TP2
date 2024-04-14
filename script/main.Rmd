@@ -1,44 +1,81 @@
 ---
-title: "TP2_projet_R"
+title: "TP2 de projet sur R"
 author: "Moussa Sow Dieme"
 date: "2024-04-07"
-output:
-  html_document:
-    theme: lumen  # Changer le thème en "lumen"
+output: 
+  rmdformats::readthedown
 ---
 
-# TP 02-Logiciel statistique R
+```{=html}
+<style>
 
-## Importations et mise en forme
 
-```{r echo=FALSE}
+body {
+  font-family: Consolas,lato,Arial  ;
+  font-size: 18px; 
+  color: #221575 ;
+  max-width: 90%; /* rien ne change */
+  margin: 0 auto;
+}
 
-# import des packages
+.important{
+  background-color: #E6F0FF;
+  border: 2px solid #CAD3E0;
+  border-radius:10px;
+  padding: 10px;
+}
+
+</style>
+```
+# Importations et mise en forme
+
+```{r include=FALSE, r,message=FALSE}
 
 library(readxl)
 library(questionr)
 library(labelled)
 library(dplyr)
+library(gtsummary)
 library(ggplot2)
-
- # import de la base
+library(ggpubr) # pour ggboxplot
+source("main_TP1.r",local = TRUE, chdir = TRUE) #  juste univarie() et bivarie() du tp 1
+ 
 
 base_tp2 <- read_excel("../data/Base_TP2.xlsx")
 
+
+```
+`library(readxl)`
+`library(questionr)`
+`library(labelled)`
+`library(dplyr)`
+`library(gtsummary)`
+`library(ggplot2)`
+`library(ggpubr)`
+`base_tp2 <- read_excel("../data/Base_TP2.xlsx")`
+`source("main_TP1.r",local = TRUE, chdir = TRUE)`
+
+--> on evite ainsi d'executer les graphiques du TP1 
+
+ 
+
+
+
+# Questions preliminaires
+```{r}
 paste("Le nombre de ligne de notre base est :",nrow(base_tp2))
 paste("Le nombre de colonne de notre base est: ",ncol(base_tp2))
 ```
+# Recodage et labellisation
 
-## Recodage et labellisation
+----- \> avant labelisation
 
-```{r}
-
-  look_for(base_tp2)%>%
-    as.data.frame()
+```{r,class.output="important"}
+look_for(base_tp2)[,c("pos","label")]
 
 ```
 
-### ----\> Labellisation
+## ----\> Labellisation
 
 ```{r}
 
@@ -57,7 +94,6 @@ var_label(base_tp2$types_varietes_1)<-"Utilisateurs de varietes traditionelles "
 var_label(base_tp2$types_varietes_2)<-"Utilisateurs de varietes ameliorees "
 
 #======> Les deux variables precedentes decoulent de la variable types_varietes leur existence decoule de la digitalisation du questionnaire !?
-
 
 var_label(base_tp2$criteres_var)<-"liste des critere de choix des varietes de sesame retenu" 
 var_label(base_tp2$criteres_var_1)<-"critere rendement eleve" 
@@ -81,18 +117,24 @@ var_label(base_tp2$criteres_var_16)<-"critere autre a preciser"
 
 ### Resultat de la labelisation
 
-```{r}
-look_for(base_tp2)[,c("pos","label","levels")]
+-----\> apres labelisation
+
+```{r, class.output="important"}
+look_for(base_tp2)[,c("pos","label")]
 
 ```
 
-### ----\> Recodage
+## ----\> Recodage
+
+Les variables dont les informations sont incomplete(region,departement,...) ne seront pas recode
 
 ```{r}
+# copie de la base initial
+
 base_tp2_recode<-as.data.frame(base_tp2) 
-# Les variables dont les informations sont incomplete(region,departement,...) ne seront pas recode
 
 # ------------- variable sexe -------------
+
 base_tp2_recode$sexe<-recode_factor(base_tp2_recode$sexe,
                         "1"="Homme",
                         "2"="Femme"
@@ -134,6 +176,17 @@ base_tp2_recode$ethnie <-recode_factor(base_tp2_recode$ethnie,
                                 )
 
 # ------------- variable occupation -------------
+```
+
+### Remarque general sur la variable occupation
+
+Dans le traitement de la variable `occupation`, les options sont limitées aux entiers jusqu'à 66, représentés par les chiffres de 1 à 6. La méthode consiste en l'utilisation d'une fonction nommée `generer_combinaisons()` qui retourne le libellé associé à un entier donné. Deux vecteurs sont utilisés : `all_combinaison_chiffre`, qui contient tous les entiers nécessaires, et `all_combinaison_label`, qui stocke leurs libellés respectifs. Pour ce faire, la fonction `generer_combinaisons()` est appliquée à chaque élément de `all_combinaison_chiffre`. En ce qui concerne le recodage proprement dit, une vérification est effectuée pour déterminer si chaque valeur de la colonne `occupation` dans `base_tp2_recode` correspond à l'une des anciennes valeurs nécessitant un recodage. Cette comparaison est réalisée avec les valeurs de la colonne "ancienne" du dataframe `correspondance_df` à l'aide de la fonction `dplyr::case_when()`. Si une correspondance est identifiée, la valeur de `occupation` dans `base_tp2_recode` est remplacée par la valeur correspondante de la colonne `nouvelle` du dataframe `correspondance_df`. Pour ce faire, la fonction `match()` est utilisée pour trouver l'indice de la valeur correspondante dans le vecteur `nouvelle`, basé sur l'indice de la valeur dans le vecteur `ancienne`. Les valeurs de `occupation` qui ne correspondent à aucune des anciennes valeurs nécessitant un recodage sont conservées inchangées. L'expression `TRUE \~ as.character(base_tp2_recode\$occupation)` dans `case_when()` est employée pour cela.
+
+Dernier remarque, certains modalite de la variable `occupation` comme 22 sont sans interpretation possible.
+
+je me permet de les remplacer par leur equivaleur a un chiffre .
+
+```{r}
 
 # certains producteurs ont plusieurs occupation ecrit sous forme genre 12
 
@@ -150,11 +203,18 @@ correspondances <- c(
 generer_combinaisons <- function(chiffre) {
   # Séparation du nombre en chiffres individuels
   all_chiffre <- strsplit(as.character(chiffre), "")[[1]]
-  
+  all_chiffre<-c(all_chiffre,all_chiffre[1])
+
+  # si je suis dans le cas 11 , 22 , 33, ect je garde que le premier chiffre
+  if (length(all_chiffre==2)){          # pour pouvoir ecrire all_chiffre[2]
+      if (all_chiffre[1]==all_chiffre[2]){
+        all_chiffre <- all_chiffre[1] # supression du last
+    } 
+  }
   # Récupération des libellés correspondant à chaque chiffre
   labels <- correspondances[all_chiffre]
   
-  # Retourner les libellés concaténés avec des tirets "-"
+  # Retourner les libellés concaténés avec des tirets <<_>>
   return(paste(labels, collapse = "-"))
 }
 
@@ -163,10 +223,10 @@ chiffres <- 1:6
 # Utilisation de la fonction expand.grid pour générer toutes les combinaisons possibles avec répétition
 combinaisons <- expand.grid(chiffres, chiffres)
 
-# Utilisation de paste0 pour combiner les chiffres en nombres à deux chiffres
+# Utilisation de paste0 pour combiner les chiffres en nombres a deux chiffres
 all_combinaison_chiffre <- paste0(combinaisons$Var1, combinaisons$Var2)
 
-# Ajout des entiers de 1 à 6 à la variable "nombres"
+# Ajout des entiers de l'intervalle [1,6]
 all_combinaison_chiffre <- c(all_combinaison_chiffre, as.character(1:6))
 all_combinaison_label<-sapply(all_combinaison_chiffre, generer_combinaisons) # applique la fonction a chaque element 
         # trop de combinaison sans interet (...)
@@ -178,9 +238,9 @@ correspondance_df <- data.frame(ancienne = all_combinaison_chiffre, nouvelle = a
 base_tp2_recode$occupation <- case_when(
   base_tp2_recode$occupation %in% correspondance_df$ancienne ~ 
     correspondance_df$nouvelle[match(base_tp2_recode$occupation, correspondance_df$ancienne)],
-  TRUE ~ as.character(base_tp2_recode$occupation)  # Conserver toutes les autres valeurs inchangées
+  TRUE ~ as.character(base_tp2_recode$occupation)  # <-- conserve toutes les autres valeurs inchangées
 )
-
+# ici pas de recode_factor car on <<definit les levels a la volle et non simultanement>>
 
 
 
@@ -233,6 +293,7 @@ base_tp2_recode$types_varietes_2 <-recode_factor(base_tp2_recode$types_varietes_
 # pas de recodage,c'est une liste des criteres retenu par le producteur
 
 # ------------- variable criteres_var_nb , nb in [1,16] -------------
+
 for (i in 1:16){
 nom_var<-paste("criteres_var_",i,sep="")
 base_tp2_recode[[nom_var]] <-recode_factor(base_tp2_recode[[nom_var]], # Technique du TP1
@@ -244,55 +305,90 @@ base_tp2_recode[[nom_var]] <-recode_factor(base_tp2_recode[[nom_var]], # Techniq
   
 ```
 
-### Resultat du recodage
+## Resultat du recodage
 
-```{r}
-head(base_tp2_recode,10)
+```{r, class.output="important"}
+head(base_tp2_recode)
+
+# la variable niveau_alphabs contient de base des valeurs NA
     
 ```
 
-```{r}
+```{r, class.output="important"}
 base_tp2_recode %>%
   select( criteres_var_1: criteres_var_16)%>%
   head()
 ```
 
-## Analyses descriptives
-
+# Analyses descriptives
+## Repartition suivant l'age
 ```{r}
-# Tableau croisé dynamique pour l'occupation et le niveau de formation
-table(base_tp2_recode$occupation, base_tp2_recode$formation)
-
+univarie(projet_=base_tp2_recode,"age",tableau=TRUE,histogramme=TRUE,boite_moustache=TRUE)
 ```
 
-On remarque que les agriculteurs non scolarise sont dominant .
-
+<center>Interpretation </center>
+Les producteurs ont une moyenne d'age de 48 ans et un age median de 49 ans
 ```{r}
-# Tableau croisé dynamique entre sexe et formation
-table(base_tp2_recode$sexe, base_tp2_recode$formation)
+tableau_effectifs
+```
+## Repartition suivant le sexe
+``` {r}
+ggboxplot(base_tp2_recode,
+x = "sexe", y = "age",
+color = "sexe", palette = c("#288EF2", "#F22222"),
+add = "jitter", shape = "sexe"
+)
 ```
 
 ```{r}
-# Histogramme de l'âge
-ggplot(base_tp2_recode, aes(x = age)) +
-  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
-  labs(title = "Distribution de l'âge", x = "Âge", y = "Fréquence")
+
+univarie(projet_=base_tp2_recode,"sexe",tableau=TRUE,diagramme_circulaire=TRUE,diagramme_baton=TRUE)
+```
+<center>Interpretation</center>
+Il y'a presque deux fois plus de producteur Homme que de producteur Femme.
+```{r}
+tableau_effectifs
+```
+## Repartition suivant le statut dans le menage
+```{r}
+univarie(projet_=base_tp2_recode,"si_chef_men",diagramme_circulaire=TRUE)
 ```
 ```{r}
-# Diagramme en barres pour la variable occupation
-occupation_plot <- ggplot(base_tp2_recode, aes(x = occupation)) + 
-  geom_bar(fill = "#FF5733") +  # Couleur personnalisée
-  labs(title = "Répartition des occupations", x = "Occupation", y = "Nombre de personnes") + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-occupation_plot
+tableau_effectifs
 ```
-```` {r}
-# Diagramme circulaire pour la variable occupation
-occupation_pie <- ggplot(base_tp2_recode, aes(x = "", fill = occupation)) +
-  geom_bar(width = 1, color = "white") +  # Créer un diagramme circulaire
-  labs(title = "Répartition des occupations") +
-  coord_polar("y") +  # Convertir en diagramme circulaire
-  theme_void()  # Supprimer les éléments de thème
-occupation_pie
-````
+<center>Interpretation</center>
+pres de la moitie des producteurs ne sont pas des chef de menages, ce sont soit
+des femmes de chef de menage soit fils ou fille du chef de menage, on est alors 
+tente de verifier la proportion de femme producteur chef de menage
+```{r}
+tableau_effectifs
+bivarie("sexe","si_chef_men",tableau=TRUE,projet_=base_tp2_recode,nuage_point=TRUE)
+resultats
+```
+<center>Interpretation</center>
+Une seul femme producteur est chef de menage
+
+
+## Repartition suivant l'occupation
+```{r}
+# dans ma fonction univarie() j'avais pas prevu que mes colonnes auront des labels (v2 ...)
+univarie(projet_=base_tp2_recode,"occupation",diagramme_circulaire=TRUE,tableau=TRUE)
+``` 
+```{r}
+tableau_effectifs
+```
+<center>Interpretation</center>
+Les agriculteurs sont largement dominant avec pres de 92% des effectifs.
+
+## Repartition suivant le type de variete utilise
+```{r}
+univarie(projet_=base_tp2_recode,"types_varietes",diagramme_baton  =TRUE,tableau=TRUE)
+```
+<center>Interpretation</center>
+Les varietes traditionelles sont largement plebicite tandisque un melange entre variete traditionelles et variete amelirer n'est que tres peu solicite
+
+## Repartition suivant le critere retenu
+```{r}
+# En construction
+
+```
